@@ -42,6 +42,7 @@ add_library(hyprspaces_core STATIC
   src/runtime.cpp
   src/runtime_utils.cpp
   src/marks.cpp
+  src/function_match.cpp
   src/process_utils.cpp
   src/debounce.cpp
   src/events.cpp
@@ -147,7 +148,6 @@ if(HYPRSPACES_BUILD_TESTS)
   enable_testing()
 
   add_executable(hyprspaces_tests
-    tests/function_hooks_test.cpp
     tests/pairing_test.cpp
     tests/dispatch_result_test.cpp
     tests/dispatch_test.cpp
@@ -177,6 +177,7 @@ if(HYPRSPACES_BUILD_TESTS)
     tests/layout_restore_test.cpp
     tests/layout_restore_tracker_test.cpp
     tests/toplevel_state_tracker_test.cpp
+    tests/function_match_test.cpp
     tests/hyprland_api_stub.cpp
     tests/debounce_test.cpp
     tests/events_test.cpp

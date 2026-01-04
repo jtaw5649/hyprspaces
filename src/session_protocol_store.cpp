@@ -13,6 +13,10 @@ namespace hyprspaces {
         constexpr int              kStoreVersion = 3;
 
         std::optional<std::string> read_text_file(const std::filesystem::path& path) {
+            std::error_code ec;
+            if (!std::filesystem::is_regular_file(path, ec) || ec) {
+                return std::nullopt;
+            }
             std::ifstream input(path);
             if (!input.good()) {
                 return std::nullopt;
@@ -276,6 +280,13 @@ namespace hyprspaces {
             return false;
         }
         output << root.dump(2);
+        output.flush();
+        if (!output.good()) {
+            if (error) {
+                *error = "failed to write session store";
+            }
+            return false;
+        }
         return true;
     }
 

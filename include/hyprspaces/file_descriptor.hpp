@@ -14,8 +14,19 @@ namespace hyprspaces {
             }
         }
 
+        FileDescriptor(const FileDescriptor&)            = delete;
+        FileDescriptor& operator=(const FileDescriptor&) = delete;
+
         FileDescriptor(FileDescriptor&& other) noexcept : fd_(other.fd_) {
             other.fd_ = -1;
+        }
+        FileDescriptor& operator=(FileDescriptor&& other) noexcept {
+            if (this == &other) {
+                return *this;
+            }
+            reset(other.fd_);
+            other.fd_ = -1;
+            return *this;
         }
 
         int get() const {

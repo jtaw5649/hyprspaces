@@ -44,6 +44,21 @@ namespace {
         ::close(pipe_fds[1]);
     }
 
+    TEST(FileDescriptor, MoveAssignTransfersOwnership) {
+        int pipe_fds[2];
+        ASSERT_EQ(::pipe(pipe_fds), 0);
+        int                        read_fd = pipe_fds[0];
+        hyprspaces::FileDescriptor fd1(read_fd);
+        hyprspaces::FileDescriptor fd2;
+
+        fd2 = std::move(fd1);
+
+        EXPECT_EQ(fd1.get(), -1);
+        EXPECT_EQ(fd2.get(), read_fd);
+        EXPECT_NE(::fcntl(read_fd, F_GETFD), -1);
+        ::close(pipe_fds[1]);
+    }
+
     TEST(FileDescriptor, ResetClosesOldAndTakesNew) {
         int pipe1[2];
         int pipe2[2];
@@ -55,6 +70,23 @@ namespace {
         fd.reset(new_fd);
         EXPECT_EQ(fd.get(), new_fd);
         EXPECT_EQ(::fcntl(old_fd, F_GETFD), -1);
+        ::close(pipe1[1]);
+        ::close(pipe2[1]);
+    }
+
+    TEST(FileDescriptor, MoveAssignClosesExistingAndTransfers) {
+        int pipe1[2];
+        int pipe2[2];
+        ASSERT_EQ(::pipe(pipe1), 0);
+        ASSERT_EQ(::pipe(pipe2), 0);
+        int                        first_fd  = pipe1[0];
+        int                        second_fd = pipe2[0];
+        hyprspaces::FileDescriptor first(first_fd);
+        hyprspaces::FileDescriptor second(second_fd);
+        second = std::move(first);
+        EXPECT_EQ(first.get(), -1);
+        EXPECT_EQ(second.get(), first_fd);
+        EXPECT_EQ(::fcntl(second_fd, F_GETFD), -1);
         ::close(pipe1[1]);
         ::close(pipe2[1]);
     }

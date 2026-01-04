@@ -475,6 +475,7 @@ TEST(RuntimeCommand, SessionProfileSaveWritesProfileFile) {
     const std::string contents((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     EXPECT_NE(contents.find("plugin:hyprspaces:profile = dev"), std::string::npos);
     EXPECT_NE(contents.find("command:alacritty -e nvim ."), std::string::npos);
+    std::filesystem::remove_all(base_dir);
 }
 
 TEST(RuntimeCommand, SessionProfileLoadDispatchesProfile) {

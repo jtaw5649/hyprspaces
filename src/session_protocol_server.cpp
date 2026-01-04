@@ -17,6 +17,7 @@
 #include "xx-session-management-v1-protocol.h"
 
 #include "hyprspaces/layout_capture.hpp"
+#include "hyprspaces/function_match.hpp"
 #include "layout_restore.hpp"
 
 namespace hyprspaces {
@@ -34,15 +35,17 @@ namespace hyprspaces {
         void                   destroy_session_resource(wl_resource* resource);
         void                   destroy_toplevel_resource(wl_resource* resource);
 
-        SessionProtocolServer* g_active_server     = nullptr;
-        CFunctionHook*         g_dwindle_hook      = nullptr;
-        CFunctionHook*         g_master_hook       = nullptr;
-        CFunctionHook*         g_window_map_hook   = nullptr;
-        CFunctionHook*         g_window_state_hook = nullptr;
+        SessionProtocolServer* g_active_server      = nullptr;
+        CFunctionHook*         g_dwindle_hook       = nullptr;
+        CFunctionHook*         g_master_hook        = nullptr;
+        CFunctionHook*         g_window_map_hook    = nullptr;
+        CFunctionHook*         g_window_state_hook  = nullptr;
+        CFunctionHook*         g_window_update_hook = nullptr;
 
         using OnWindowCreatedTilingFn = void (*)(void*, PHLWINDOW, eDirection);
         using OnWindowMapFn           = void (*)(void*);
         using OnWindowUpdateStateFn   = void (*)(void*);
+        using OnWindowUpdateDataFn    = void (*)(void*);
 
         void hk_dwindle_on_window_created_tiling(void* thisptr, PHLWINDOW window, eDirection direction) {
             if (g_dwindle_hook && g_dwindle_hook->m_original) {
@@ -99,6 +102,24 @@ namespace hyprspaces {
             g_active_server->record_window_state(window);
         }
 
+        void hk_window_on_update_window_data(void* thisptr) {
+            if (g_window_update_hook && g_window_update_hook->m_original) {
+                (reinterpret_cast<OnWindowUpdateDataFn>(g_window_update_hook->m_original))(thisptr);
+            }
+            if (!g_active_server || !thisptr) {
+                return;
+            }
+            auto* window_ptr = reinterpret_cast<Desktop::View::CWindow*>(thisptr);
+            if (!window_ptr) {
+                return;
+            }
+            const auto window = window_ptr->m_self.lock();
+            if (!window) {
+                return;
+            }
+            g_active_server->record_window_state(window);
+        }
+
         SessionReason reason_from_protocol(uint32_t reason) {
             switch (reason) {
                 case XX_SESSION_MANAGER_V1_REASON_LAUNCH: return SessionReason::kLaunch;
@@ -106,6 +127,24 @@ namespace hyprspaces {
                 case XX_SESSION_MANAGER_V1_REASON_SESSION_RESTORE: return SessionReason::kSessionRestore;
                 default: return SessionReason::kSessionRestore;
             }
+        }
+
+        std::optional<SFunctionMatch> select_match(const std::vector<SFunctionMatch>& matches, std::string_view class_tag, std::string_view signature_hint) {
+            std::vector<FunctionMatch> converted;
+            converted.reserve(matches.size());
+            for (const auto& match : matches) {
+                converted.push_back(FunctionMatch{.address = match.address, .signature = match.signature, .demangled = match.demangled});
+            }
+            const auto selected = select_function_match(converted, class_tag, signature_hint);
+            if (!selected) {
+                return std::nullopt;
+            }
+            for (const auto& match : matches) {
+                if (match.address == selected->address) {
+                    return match;
+                }
+            }
+            return std::nullopt;
         }
 
         const SessionProtocolServer::ToplevelResource* find_restored_toplevel(const std::vector<std::unique_ptr<SessionProtocolServer::ToplevelResource>>& toplevels,
@@ -511,6 +550,10 @@ namespace hyprspaces {
                 }
             }
         }
+        g_dwindle_hook = nullptr;
+        g_master_hook = nullptr;
+        g_window_map_hook = nullptr;
+        g_window_state_hook = nullptr;
     }
 
     void SessionProtocolServer::bindManager(wl_client* client, void* data, uint32_t ver, uint32_t id) {
@@ -538,16 +581,7 @@ namespace hyprspaces {
             return;
         }
 
-        const auto find_match = [&](const std::vector<SFunctionMatch>& matches, std::string_view class_tag) -> std::optional<SFunctionMatch> {
-            for (const auto& match : matches) {
-                if (match.demangled.find(class_tag) != std::string::npos || match.signature.find(class_tag) != std::string::npos) {
-                    return match;
-                }
-            }
-            return std::nullopt;
-        };
-
-        auto dwindle = find_match(layout_matches, "CHyprDwindleLayout");
+        auto dwindle = select_match(layout_matches, "CHyprDwindleLayout", "onWindowCreatedTiling");
         if (!dwindle) {
             const auto fallback = HyprlandAPI::findFunctionsByName(handle, "CHyprDwindleLayout::onWindowCreatedTiling");
             if (!fallback.empty()) {
@@ -555,7 +589,7 @@ namespace hyprspaces {
             }
         }
 
-        auto master = find_match(layout_matches, "CHyprMasterLayout");
+        auto master = select_match(layout_matches, "CHyprMasterLayout", "onWindowCreatedTiling");
         if (!master) {
             const auto fallback = HyprlandAPI::findFunctionsByName(handle, "CHyprMasterLayout::onWindowCreatedTiling");
             if (!fallback.empty()) {
@@ -587,7 +621,7 @@ namespace hyprspaces {
             return;
         }
 
-        auto map_match = find_match(map_matches, "CWindow");
+        auto map_match = select_match(map_matches, "CWindow", "onMap");
         if (!map_match) {
             const auto fallback = HyprlandAPI::findFunctionsByName(handle, "CWindow::onMap");
             if (!fallback.empty()) {
@@ -610,7 +644,7 @@ namespace hyprspaces {
             return;
         }
 
-        auto state_match = find_match(state_matches, "CWindow");
+        auto state_match = select_match(state_matches, "CWindow", "onUpdateState");
         if (!state_match) {
             const auto fallback = HyprlandAPI::findFunctionsByName(handle, "CWindow::onUpdateState");
             if (!fallback.empty()) {
@@ -624,6 +658,29 @@ namespace hyprspaces {
                 layout_hooks_.push_back(g_window_state_hook);
             } else {
                 LOGM(Log::ERR, "Failed to hook CWindow::onUpdateState");
+            }
+        }
+
+        const auto update_matches = HyprlandAPI::findFunctionsByName(handle, "updateWindowData");
+        if (update_matches.empty()) {
+            LOGM(Log::ERR, "Failed to locate updateWindowData for window hooks");
+            return;
+        }
+
+        auto update_match = select_match(update_matches, "CWindow", "updateWindowData()");
+        if (!update_match) {
+            const auto fallback = HyprlandAPI::findFunctionsByName(handle, "CWindow::updateWindowData");
+            if (!fallback.empty()) {
+                update_match = fallback.front();
+            }
+        }
+
+        if (update_match) {
+            g_window_update_hook = HyprlandAPI::createFunctionHook(handle, update_match->address, (void*)hk_window_on_update_window_data);
+            if (g_window_update_hook && g_window_update_hook->hook()) {
+                layout_hooks_.push_back(g_window_update_hook);
+            } else {
+                LOGM(Log::ERR, "Failed to hook CWindow::updateWindowData");
             }
         }
     }

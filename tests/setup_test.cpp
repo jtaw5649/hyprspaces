@@ -64,6 +64,42 @@ TEST(SetupConfig, EnsuresHyprlandConfSourceWhenMissing) {
     std::filesystem::remove_all(dir);
 }
 
+TEST(SetupConfig, ReportsHyprspacesConfWriteFailure) {
+    const auto dir  = make_temp_dir();
+    const auto path = dir / "hyprspaces.conf";
+
+    std::error_code ec;
+    std::filesystem::permissions(dir,
+                                 std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec,
+                                 std::filesystem::perm_options::replace,
+                                 ec);
+    if (ec) {
+        GTEST_SKIP();
+    }
+
+    EXPECT_FALSE(hyprspaces::ensure_hyprspaces_conf(path));
+    EXPECT_FALSE(std::filesystem::exists(path));
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SetupConfig, ReportsHyprlandConfSourceWriteFailure) {
+    const std::filesystem::path full_path("/dev/full");
+    if (!std::filesystem::exists(full_path)) {
+        GTEST_SKIP();
+    }
+
+    EXPECT_FALSE(hyprspaces::ensure_hyprland_conf_source(full_path, "/tmp/hyprspaces.conf"));
+}
+
+TEST(SetupConfig, RejectsNonRegularHyprlandConfSource) {
+    const std::filesystem::path null_path("/dev/null");
+    if (!std::filesystem::exists(null_path)) {
+        GTEST_SKIP();
+    }
+
+    EXPECT_FALSE(hyprspaces::ensure_hyprland_conf_source(null_path, "/tmp/hyprspaces.conf"));
+}
+
 TEST(SetupConfig, AppendsHyprlandConfSourceWhenMissing) {
     const auto dir          = make_temp_dir();
     const auto path         = dir / "hypr" / "hyprland.conf";
@@ -230,5 +266,31 @@ TEST(SetupWaybarAssets, InstallsAndUninstallsAssets) {
     const auto uninstall_error = hyprspaces::uninstall_waybar_assets(paths);
     ASSERT_FALSE(uninstall_error.has_value());
     EXPECT_FALSE(std::filesystem::exists(paths.waybar_dir));
+    std::filesystem::remove_all(dir);
+}
+
+TEST(SetupWaybarAssets, ReportsThemeWriteFailure) {
+    const std::filesystem::path full_path("/dev/full");
+    if (!std::filesystem::exists(full_path)) {
+        GTEST_SKIP();
+    }
+
+    const auto              dir = make_temp_dir();
+    const hyprspaces::Paths paths{
+        .base_dir             = dir,
+        .hyprspaces_conf_path = dir / "hyprspaces.conf",
+        .hyprland_conf_path   = dir / "hyprland.conf",
+        .profiles_dir         = dir / "hypr" / "hyprspaces" / "profiles",
+        .proc_root            = "/proc",
+        .state_dir            = dir / "state" / "hyprspaces",
+        .session_store_path   = dir / "state" / "hyprspaces" / "session-store.json",
+        .waybar_dir           = dir / "waybar",
+        .waybar_theme_css     = full_path,
+    };
+
+    const auto error = hyprspaces::install_waybar_assets(paths, std::nullopt);
+
+    ASSERT_TRUE(error.has_value());
+    EXPECT_EQ(*error, "unable to write " + full_path.string());
     std::filesystem::remove_all(dir);
 }

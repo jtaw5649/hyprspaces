@@ -96,6 +96,33 @@ TEST(SessionProtocolStore, SavesAndReloadsSessions) {
     std::filesystem::remove_all(dir);
 }
 
+TEST(SessionProtocolStore, ReportsWriteFailure) {
+    const std::filesystem::path full_path("/dev/full");
+    if (!std::filesystem::exists(full_path)) {
+        GTEST_SKIP();
+    }
+
+    hyprspaces::SessionProtocolStore store;
+    std::string                      error;
+    EXPECT_TRUE(store.remember_session("session-1"));
+
+    EXPECT_FALSE(store.save(full_path, &error));
+    EXPECT_EQ(error, "failed to write session store");
+}
+
+TEST(SessionProtocolStore, RejectsNonRegularFile) {
+    const std::filesystem::path null_path("/dev/null");
+    if (!std::filesystem::exists(null_path)) {
+        GTEST_SKIP();
+    }
+
+    std::string error;
+    const auto  loaded = hyprspaces::SessionProtocolStore::load(null_path, &error);
+
+    EXPECT_FALSE(loaded.has_value());
+    EXPECT_EQ(error, "failed to read session store");
+}
+
 TEST(SessionProtocolStore, RemovesSessionsAndToplevels) {
     hyprspaces::SessionProtocolStore store;
 

@@ -134,6 +134,10 @@ bind = SUPER, mouse_up, hyprspaces:paired_cycle, prev
                 return "unable to write " + path.string();
             }
             output << contents;
+            output.flush();
+            if (!output.good()) {
+                return "unable to write " + path.string();
+            }
             return std::nullopt;
         }
 
@@ -186,13 +190,24 @@ bind = SUPER, mouse_up, hyprspaces:paired_cycle, prev
         }
 
         std::ofstream output(config_path);
+        if (!output.good()) {
+            return false;
+        }
         output << render_hyprspaces_conf();
+        output.flush();
+        if (!output.good()) {
+            return false;
+        }
         return true;
     }
 
     bool ensure_hyprland_conf_source(const std::filesystem::path& hyprland_conf_path, const std::filesystem::path& include_path) {
         std::string contents;
         if (std::filesystem::exists(hyprland_conf_path)) {
+            std::error_code ec;
+            if (!std::filesystem::is_regular_file(hyprland_conf_path, ec) || ec) {
+                return false;
+            }
             contents = read_file_contents(hyprland_conf_path);
             if (contains_hyprspaces_source(contents)) {
                 return false;
@@ -211,6 +226,10 @@ bind = SUPER, mouse_up, hyprspaces:paired_cycle, prev
             output << '\n';
         }
         output << "source = " << include_path.string() << '\n';
+        output.flush();
+        if (!output.good()) {
+            return false;
+        }
         return true;
     }
 
