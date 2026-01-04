@@ -1,0 +1,7 @@
+{
+  "primary_monitor": "HDMI-A-1",
+  "secondary_monitor": "DP-1",
+  "workspace_count": 5,
+  "wrap_cycling": true,
+  "safe_mode": true
+}

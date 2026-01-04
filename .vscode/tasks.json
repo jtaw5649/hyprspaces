@@ -1,0 +1,31 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cmake: configure",
+      "type": "shell",
+      "command": "cmake -S . -B build",
+      "problemMatcher": []
+    },
+    {
+      "label": "cmake: build",
+      "type": "shell",
+      "command": "cmake --build build",
+      "dependsOn": "cmake: configure",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "ctest",
+      "type": "shell",
+      "command": "ctest --test-dir build",
+      "dependsOn": "cmake: build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "format: clang-format",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/format.sh",
+      "problemMatcher": []
+    }
+  ]
+}

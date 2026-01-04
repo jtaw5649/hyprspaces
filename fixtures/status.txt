@@ -1,0 +1,10 @@
+Hyprspaces: loaded
+Rules: runtime
+Wrap cycling: enabled
+Waybar theme: default
+
+Monitor groups:
+  pair (offset 0): HDMI-A-1, DP-1
+
+Active group: pair
+Active workspace: 7 (normalized 2)

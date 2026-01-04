@@ -1,0 +1,12 @@
+[repository]
+name = "hyprspaces"
+authors = ["jtaw"]
+
+[hyprspaces]
+description = "Paired workspaces and session utilities for Hyprland"
+authors = ["jtaw"]
+output = "build/hyprspaces.so"
+build = [
+  "cmake -S . -B build -DHYPRSPACES_BUILD_TESTS=OFF",
+  "cmake --build build"
+]
